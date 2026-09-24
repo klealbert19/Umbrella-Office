@@ -5,7 +5,7 @@ import { VERSION, PROTOCOL_VERSION, CONFIG_VERSION, getVersionInfo } from '../sr
 
 describe('version', () => {
   it('should have correct version', () => {
-    expect(VERSION).toBe('0.3.1');
+    expect(VERSION).toBe('0.3.2');
   });
 
   it('should have correct protocol version', () => {
@@ -18,7 +18,7 @@ describe('version', () => {
 
   it('should return version info', () => {
     const info = getVersionInfo();
-    expect(info.version).toBe('0.3.1');
+    expect(info.version).toBe('0.3.2');
     expect(info.protocolVersion).toBe('1');
     expect(info.configVersion).toBe('1');
     expect(info.name).toBe('Umbrella Office');

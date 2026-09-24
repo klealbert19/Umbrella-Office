@@ -2,11 +2,15 @@
 
 **Umbrella Office** é um runtime de automação de escritório local-first, seguro e extensível para desenvolvedores. Ele fornece uma interface de linha de comando (CLI) e API programática para executar tarefas de filesystem, processos, npm e git dentro de workspaces isolados e seguros.
 
-## Versão Atual: 0.3.1
+## Versão Atual: 0.3.2
+
+### Novidades na V0.3.2
+- **Distribuição Autocontida**: Eliminação do script `prepare` - artefatos de build (`dist/`) commitados no repositório
+- **Instalação Limpa**: Sem avisos de "install scripts blocked" ao instalar via GitHub
+- **Comando `umbrella`**: Binário global renomeado de `umbrella-office` para `umbrella`
 
 ### Novidades na V0.3.1
 - **Instalação via GitHub**: Correção para instalação direta via `git+https://github.com/klealbert19/Umbrella-Office.git`
-- **Comando `umbrella`**: Binário global renomeado de `umbrella-office` para `umbrella`
 
 ### Novidades na V0.3
 - **Process Engine**: Execução segura de comandos shell com timeout, validação de cwd e captura de stdout/stderr
