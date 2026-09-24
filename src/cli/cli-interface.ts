@@ -1,13 +1,13 @@
 /**
  * Interface CLI interativa do Umbrella Office.
  *
- * Comandos: help, status, version, config, run, workspace, file, exit
+ * Comandos: help, status, version, config, run, workspace, file, process, npm, git, exit
  * Permanece interativa, trata Ctrl+C, EOF, comandos vazios e inválidos.
  */
 import * as readline from 'readline';
 import { OfficeRuntime } from '../core/office-runtime';
 import { createLocalCommandTask } from '../core/task';
-import { createFilesystemTask, createWorkspaceTask } from '../core/task-v2';
+import { createFilesystemTask, createWorkspaceTask, createProcessTask, createNpmTask, createGitTask } from '../core/task-v2';
 
 export class CliInterface {
   private readonly runtime: OfficeRuntime;
@@ -150,6 +150,15 @@ export class CliInterface {
         case 'run':
           await this.handleRun(rest);
           break;
+        case 'process':
+          await this.handleProcess(rest);
+          break;
+        case 'npm':
+          await this.handleNpm(rest);
+          break;
+        case 'git':
+          await this.handleGit(rest);
+          break;
         case 'workspace':
           await this.handleWorkspace(rest);
           break;
@@ -184,6 +193,23 @@ export class CliInterface {
     console.log('  version           Show version info');
     console.log('  config            Show current configuration');
     console.log('  run <cmd> [args]  Execute a local command (e.g. run node --version)');
+    console.log('  process <cmd>     Process operations:');
+    console.log('    run <cmd> [args]  Execute a process with args');
+    console.log('  npm <cmd>         NPM operations (requires npm project):');
+    console.log('    install [args]    Run npm install');
+    console.log('    run <script> [args]  Run npm script');
+    console.log('    test [args]       Run npm test');
+    console.log('    build             Run npm run build');
+    console.log('    exec <args...>    Execute arbitrary npm command');
+    console.log('  git <cmd>         Git operations (requires git repo):');
+    console.log('    status            Show git status --short');
+    console.log('    diff [args]       Show git diff');
+    console.log('    log [args]        Show git log (recent)');
+    console.log('    branch            Show branches');
+    console.log('    remote            Show remotes');
+    console.log('    add <paths...>    Stage files');
+    console.log('    commit <message>  Commit staged changes');
+    console.log('    checkout <branch> Checkout branch');
     console.log('  workspace <cmd>    Workspace management:');
     console.log('    open <path>      Open a workspace at the specified path');
     console.log('    info              Show current workspace information');
@@ -461,6 +487,319 @@ export class CliInterface {
         }
         default:
           console.log(`Unknown file command: ${sub}`);
+          console.log('Type "help" for available commands.');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.log(`Error: ${message}`);
+    }
+  }
+
+  private async handleProcess(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      console.log('Usage: process <command>');
+      console.log('Commands:');
+      console.log('  run <cmd> [args...]  Execute a process with args');
+      return;
+    }
+    const [sub, ...rest] = args;
+    const cmd = sub.toLowerCase();
+
+    try {
+      switch (cmd) {
+        case 'run': {
+          if (rest.length === 0) {
+            console.log('Usage: process run <command> [args...]');
+            return;
+          }
+          const [command, ...cmdArgs] = rest;
+          const task = createProcessTask({
+            command,
+            args: cmdArgs,
+          });
+          console.log('Process started...');
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+            console.log('Process completed successfully.');
+          } else {
+            console.log(`Process failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        default:
+          console.log(`Unknown process command: ${sub}`);
+          console.log('Type "help" for available commands.');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.log(`Error: ${message}`);
+    }
+  }
+
+  private async handleNpm(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      console.log('Usage: npm <command>');
+      console.log('Commands:');
+      console.log('  install [args...]    Run npm install');
+      console.log('  run <script> [args...]  Run npm script');
+      console.log('  test [args...]       Run npm test');
+      console.log('  build                Run npm run build');
+      console.log('  exec <args...>       Execute arbitrary npm command');
+      return;
+    }
+    const [sub, ...rest] = args;
+    const cmd = sub.toLowerCase();
+
+    try {
+      switch (cmd) {
+        case 'install': {
+          const task = createNpmTask('npm.install', {
+            args: rest,
+          });
+          console.log('Running npm install...');
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+            console.log('npm install completed successfully.');
+          } else {
+            console.log(`npm install failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        case 'run': {
+          if (rest.length === 0) {
+            console.log('Usage: npm run <script> [args...]');
+            return;
+          }
+          const [script, ...scriptArgs] = rest;
+          const task = createNpmTask('npm.run', {
+            script,
+            args: scriptArgs,
+          });
+          console.log(`Running npm run ${script}...`);
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+            console.log('npm run completed successfully.');
+          } else {
+            console.log(`npm run failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        case 'test': {
+          const task = createNpmTask('npm.test', {
+            args: rest,
+          });
+          console.log('Running npm test...');
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+            console.log('npm test completed successfully.');
+          } else {
+            console.log(`npm test failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        case 'build': {
+          const task = createNpmTask('npm.build', {});
+          console.log('Running npm run build...');
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+            console.log('npm build completed successfully.');
+          } else {
+            console.log(`npm build failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        case 'exec': {
+          if (rest.length === 0) {
+            console.log('Usage: npm exec <args...>');
+            return;
+          }
+          const task = createNpmTask('npm.exec', {
+            args: rest,
+          });
+          console.log(`Running npm ${rest.join(' ')}...`);
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+            console.log('npm exec completed successfully.');
+          } else {
+            console.log(`npm exec failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        default:
+          console.log(`Unknown npm command: ${sub}`);
+          console.log('Type "help" for available commands.');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.log(`Error: ${message}`);
+    }
+  }
+
+  private async handleGit(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      console.log('Usage: git <command>');
+      console.log('Commands:');
+      console.log('  status            Show git status --short');
+      console.log('  diff [args...]    Show git diff');
+      console.log('  log [args...]     Show git log (recent)');
+      console.log('  branch            Show branches');
+      console.log('  remote            Show remotes');
+      console.log('  add <paths...>    Stage files');
+      console.log('  commit <message>  Commit staged changes');
+      console.log('  checkout <branch> Checkout branch');
+      return;
+    }
+    const [sub, ...rest] = args;
+    const cmd = sub.toLowerCase();
+
+    try {
+      switch (cmd) {
+        case 'status': {
+          const task = createGitTask('git.status', {});
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+          } else {
+            console.log(`git status failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        case 'diff': {
+          const task = createGitTask('git.diff', {
+            args: rest,
+          });
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+          } else {
+            console.log(`git diff failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        case 'log': {
+          const task = createGitTask('git.log', {
+            args: rest,
+          });
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+          } else {
+            console.log(`git log failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        case 'branch': {
+          const task = createGitTask('git.branch', {});
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+          } else {
+            console.log(`git branch failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        case 'remote': {
+          const task = createGitTask('git.remote', {});
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+          } else {
+            console.log(`git remote failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        case 'add': {
+          if (rest.length === 0) {
+            console.log('Usage: git add <paths...>');
+            return;
+          }
+          const task = createGitTask('git.add', {
+            paths: rest,
+          });
+          console.log(`Staging files: ${rest.join(', ')}`);
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+            console.log('Files staged successfully.');
+          } else {
+            console.log(`git add failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        case 'commit': {
+          if (rest.length === 0) {
+            console.log('Usage: git commit <message>');
+            return;
+          }
+          const message = rest.join(' ');
+          const task = createGitTask('git.commit', {
+            message,
+          });
+          console.log(`Committing with message: ${message}`);
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+            console.log('Commit completed successfully.');
+          } else {
+            console.log(`git commit failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        case 'checkout': {
+          if (rest.length === 0) {
+            console.log('Usage: git checkout <branch>');
+            return;
+          }
+          const [branch] = rest;
+          const task = createGitTask('git.checkout', {
+            branch,
+          });
+          console.log(`Checking out branch: ${branch}`);
+          const result = await this.runtime.getTaskRouter().route(task);
+          if (result.success) {
+            if (result.output) {
+              console.log(result.output);
+            }
+            console.log('Checkout completed successfully.');
+          } else {
+            console.log(`git checkout failed: ${result.error ?? 'unknown error'}`);
+          }
+          break;
+        }
+        default:
+          console.log(`Unknown git command: ${sub}`);
           console.log('Type "help" for available commands.');
       }
     } catch (err) {

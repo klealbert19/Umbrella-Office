@@ -9,6 +9,15 @@ import { Logger } from '../logging/logger';
 
 export type PermissionName =
   | 'process.execute'
+  | 'process.spawn'
+  | 'npm.execute'
+  | 'npm.install'
+  | 'npm.run'
+  | 'npm.test'
+  | 'npm.build'
+  | 'npm.exec'
+  | 'git.read'
+  | 'git.write'
   | 'filesystem.read'
   | 'filesystem.write'
   | 'filesystem.edit'
@@ -19,8 +28,7 @@ export type PermissionName =
   | 'workspace.close'
   | 'workspace.read'
   | 'workspace.scan'
-  // Futuras permissões (não implementadas na V0.2):
-  // | 'git.execute'
+  // Futuras permissões:
   // | 'docker.execute'
   // | 'browser.control'
   // | 'network.request'
@@ -34,6 +42,15 @@ export class PermissionManager {
     this.logger = logger;
     this.permissions = new Map<PermissionName, boolean>([
       ['process.execute', true],
+      ['process.spawn', true],
+      ['npm.execute', true],
+      ['npm.install', true],
+      ['npm.run', true],
+      ['npm.test', true],
+      ['npm.build', true],
+      ['npm.exec', true],
+      ['git.read', true],
+      ['git.write', true],
       ['filesystem.read', true],
       ['filesystem.write', true],
       ['filesystem.edit', true],
@@ -78,6 +95,28 @@ export class PermissionManager {
     switch (taskType) {
       case 'local.command':
         return 'process.execute';
+      case 'process.execute':
+        return 'process.spawn';
+      case 'npm.install':
+        return 'npm.install';
+      case 'npm.run':
+        return 'npm.run';
+      case 'npm.test':
+        return 'npm.test';
+      case 'npm.build':
+        return 'npm.build';
+      case 'npm.exec':
+        return 'npm.exec';
+      case 'git.status':
+      case 'git.diff':
+      case 'git.log':
+      case 'git.branch':
+      case 'git.remote':
+        return 'git.read';
+      case 'git.add':
+      case 'git.commit':
+      case 'git.checkout':
+        return 'git.write';
       case 'filesystem.read':
         return 'filesystem.read';
       case 'filesystem.write':

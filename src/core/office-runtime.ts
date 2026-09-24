@@ -22,6 +22,9 @@ import { FilesystemEngine } from '../filesystem/filesystem-engine';
 import { ProjectScanner } from '../scanner/project-scanner';
 import { WorkspaceManager } from '../workspace/workspace-manager';
 import { TaskResult } from './result';
+import { ProcessTool } from '../tools/process/process-tool';
+import { NpmTool } from '../tools/npm/npm-tool';
+import { GitTool } from '../tools/git/git-tool';
 
 export type RuntimeState = 'STARTING' | 'ONLINE' | 'STOPPING' | 'STOPPED' | 'ERROR';
 export type RuntimeMode = 'LOCAL' | 'REMOTE';
@@ -41,6 +44,9 @@ export class OfficeRuntime {
   private filesystemEngine!: FilesystemEngine;
   private projectScanner!: ProjectScanner;
   private workspaceManager!: WorkspaceManager;
+  private processTool!: ProcessTool;
+  private npmTool!: NpmTool;
+  private gitTool!: GitTool;
 
   getState(): RuntimeState {
     return this.state;
@@ -74,6 +80,18 @@ export class OfficeRuntime {
     return this.logger;
   }
 
+  getProcessTool(): ProcessTool {
+    return this.processTool;
+  }
+
+  getNpmTool(): NpmTool {
+    return this.npmTool;
+  }
+
+  getGitTool(): GitTool {
+    return this.gitTool;
+  }
+
   async start(baseDir?: string): Promise<void> {
     this.state = 'STARTING';
 
@@ -104,6 +122,11 @@ export class OfficeRuntime {
       this.projectScanner = new ProjectScanner(this.logger, this.filesystemEngine);
       this.workspaceManager = new WorkspaceManager(this.logger, this.filesystemSecurity, this.projectScanner, this.configManager);
 
+      // Inicializa as novas ferramentas V0.3
+      this.processTool = new ProcessTool(this.logger, this.filesystemSecurity);
+      this.npmTool = new NpmTool(this.logger, this.filesystemSecurity, this.processTool);
+      this.gitTool = new GitTool(this.logger, this.filesystemSecurity, this.processTool);
+
       // Restaura workspace ativo do estado, se existir e for válido
       const savedWorkspace = this.configManager.getActiveWorkspace();
       if (savedWorkspace) {
@@ -127,7 +150,10 @@ export class OfficeRuntime {
         this.permissionManager,
         this.logger,
         this.filesystemEngine,
-        this.workspaceManager
+        this.workspaceManager,
+        this.processTool,
+        this.npmTool,
+        this.gitTool
       );
 
       const orchConfig = this.configManager.getConfig().orchestrator;

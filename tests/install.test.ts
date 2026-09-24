@@ -33,9 +33,9 @@ describe('instalação: pré-requisitos', () => {
     expect(typeof pkg['version']).toBe('string');
   });
 
-  it('versão do pacote é 0.2.0', () => {
+  it('versão do pacote é 0.3.0', () => {
     const pkg = readJson(PKG_PATH);
-    expect(pkg['version']).toBe('0.2.0');
+    expect(pkg['version']).toBe('0.3.0');
   });
 
   it('engines exige node >= 18', () => {

@@ -1,5 +1,321 @@
 # Umbrella Office
 
+**Umbrella Office** é um runtime de automação de escritório local-first, seguro e extensível para desenvolvedores. Ele fornece uma interface de linha de comando (CLI) e API programática para executar tarefas de filesystem, processos, npm e git dentro de workspaces isolados e seguros.
+
+## Versão Atual: 0.3.0
+
+### Novidades na V0.3
+- **Process Engine**: Execução segura de comandos shell com timeout, validação de cwd e captura de stdout/stderr
+- **NPM Tool**: Gerenciamento de pacotes (install, run, test, build, exec) com detecção automática de package manager
+- **Git Tool**: Operações Git completas (status, diff, log, branch, remote, add, commit, checkout) com validação de paths
+- **Teste de Integração Real**: Fluxo completo validando workspace → scan → npm install/test/build → git status/diff/add/commit/log
+
+---
+
+## Instalação
+
+```bash
+# Via npm (recomendado)
+npm install -g @umbrella/office
+
+# Ou clone e build local
+git clone https://github.com/klealbert19/Umbrella-Office
+cd Umbrella-Office
+npm install
+npm run build
+npm link
+```
+
+## Início Rápido
+
+```bash
+# Iniciar CLI interativo
+umbrella
+
+# Ou executar comando único (modo pipe)
+echo 'workspace.open {"path": "/caminho/projeto"}' | umbrella
+```
+
+---
+
+## Arquitetura
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      OfficeRuntime                          │
+│  (State Machine: INIT → READY → RUNNING → SHUTTING_DOWN)   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+         ┌─────────────────┼─────────────────┐
+         ▼                 ▼                 ▼
+┌─────────────────┐ ┌───────────────┐ ┌───────────────┐
+│  TaskRouter     │ │PermissionMgr  │ │ ConfigManager │
+│  (routes tasks) │ │(boundaries)   │ │(persistence)  │
+└────────┬────────┘ └───────┬───────┘ └───────┬───────┘
+         │                  │                 │
+    ┌────┴────┐       ┌─────┴─────┐    ┌──────┴──────┐
+    ▼         ▼       ▼           ▼    ▼             ▼
+LocalExec  FS Engine  WorkspaceMgr  Scanner  ProcessTool
+    │         │           │           │         │
+    ▼         ▼           ▼           ▼         ▼
+  spawn    read/write   open/close  detect    NpmTool
+  cmds     edit/delete  scan        project   GitTool
+```
+
+### Componentes Principais
+
+| Componente | Responsabilidade |
+|------------|------------------|
+| **OfficeRuntime** | Orquestrador principal, máquina de estados, ciclo de vida |
+| **TaskRouter** | Roteia tasks para executores apropriados |
+| **PermissionManager** | Boundaries de permissão por workspace |
+| **ConfigManager** | Persistência em `~/.umbrella/config.json` + `state.json` |
+| **FilesystemEngine** | Operações de arquivo seguras (read, write, edit, delete, list, mkdir) |
+| **WorkspaceManager** | Gerencia workspace ativo, abertura/fechamento, scan |
+| **ProjectScanner** | Detecta tipo de projeto, package manager, git |
+| **ProcessTool** | Execução de processos com timeout e validação |
+| **NpmTool** | Operações npm/yarn/pnpm via ProcessTool |
+| **GitTool** | Operações git via ProcessTool |
+
+---
+
+## Segurança
+
+### Contenção de Workspace
+Todas as operações de filesystem, processo, npm e git são **contidas no workspace ativo**:
+
+```typescript
+// Validação de path (simplificada)
+function ensureWithinWorkspace(targetPath: string): string {
+  const resolved = path.resolve(targetPath);
+  const realPath = fs.realpathSync(resolved); // Resolve symlinks
+  const workspace = getActiveWorkspace();
+  const workspaceReal = fs.realpathSync(workspace);
+  
+  const relative = path.relative(workspaceReal, realPath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Path traversal attempt blocked');
+  }
+  return realPath;
+}
+```
+
+### Proteções Implementadas
+- ✅ Bloqueio de path traversal (`../`)
+- ✅ Resolução de symlinks/junctions (Windows + Unix)
+- ✅ Validação de cwd para processos
+- ✅ Validação de paths para operações git
+- ✅ Permissões granulares por tipo de operação
+
+### Modelo de Permissões (V0.3)
+
+| Permissão | Operações | Default |
+|-----------|-----------|---------|
+| `filesystem.read` | readFile, listDirectory | ✅ |
+| `filesystem.write` | writeFile, createDirectory | ✅ |
+| `filesystem.edit` | editFile | ✅ |
+| `filesystem.delete` | deleteFile | ✅ |
+| `workspace.open` | workspace.open | ✅ |
+| `workspace.close` | workspace.close | ✅ |
+| `workspace.scan` | workspace.scan | ✅ |
+| `process.execute` | process.execute | ✅ |
+| `npm.execute` | npm.install, run, test, build, exec | ✅ |
+| `git.read` | git.status, diff, log, branch, remote | ✅ |
+| `git.write` | git.add, commit, checkout | ✅ |
+
+---
+
+## CLI - Comandos Disponíveis
+
+### Workspace
+```bash
+workspace.open <path>     # Abre workspace (persiste como ativo)
+workspace.close           # Fecha workspace ativo
+workspace.info            # Info do workspace ativo
+workspace.scan            # Escaneia projeto (tipo, PM, git)
+```
+
+### Filesystem
+```bash
+fs.read <path>                    # Lê arquivo
+fs.write <path> <content>         # Escreve arquivo (cria dirs)
+fs.edit <path> <old> <new>        # Edita arquivo (substitui primeira ocorrência)
+fs.delete <path>                  # Deleta arquivo
+fs.list <path>                    # Lista diretório
+fs.mkdir <path>                   # Cria diretório (recursivo)
+```
+
+### Process
+```bash
+process.exec <command> [args...]  # Executa comando com timeout (default 30s)
+# Ex: process.exec node script.js
+# Ex: process.exec npm test
+```
+
+### NPM
+```bash
+npm.install [package...]          # npm install (ou yarn/pnpm)
+npm.run <script> [args...]        # npm run <script>
+npm.test [args...]                # npm test
+npm.build [args...]               # npm run build
+npm.exec <command> [args...]      # npx <command>
+```
+
+### Git
+```bash
+git.status                        # git status --porcelain
+git.diff [path]                   # git diff
+git.log [options]                 # git log --oneline -10
+git.branch [name]                 # git branch (lista ou cria)
+git.remote [name] [url]           # git remote (lista ou adiciona)
+git.add <paths...>                # git add <paths>
+git.commit <message>              # git commit -m <message>
+git.checkout <branch>             # git checkout <branch>
+```
+
+### Sistema
+```bash
+help                              # Mostra ajuda
+version                           # Mostra versão
+exit / quit                       # Sai do CLI
+```
+
+---
+
+## API Programática
+
+```typescript
+import { OfficeRuntime } from '@umbrella/office';
+
+const runtime = new OfficeRuntime();
+await runtime.start();
+
+// Abrir workspace
+const result = await runtime.executeTask({
+  type: 'workspace.open',
+  payload: { path: '/caminho/projeto' }
+});
+
+// Executar npm test
+const testResult = await runtime.executeTask({
+  type: 'npm.test',
+  payload: { args: ['--coverage'] }
+});
+
+// Executar comando arbitrário
+const procResult = await runtime.executeTask({
+  type: 'process.execute',
+  payload: { 
+    command: 'node', 
+    args: ['build.js'],
+    timeout: 60000 
+  }
+});
+
+await runtime.shutdown();
+```
+
+---
+
+## Configuração
+
+Arquivos em `~/.umbrella/`:
+- `config.json` - Configuração do usuário (nunca sobrescrito)
+- `state.json` - Estado da sessão (workspace ativo, etc.)
+- `logs/office.log` - Logs estruturados JSON
+
+### Exemplo config.json
+```json
+{
+  "version": 1,
+  "office": {
+    "defaultTimeout": 30000,
+    "maxLogSize": 10485760
+  },
+  "orchestrator": {
+    "autoSaveInterval": 5000
+  }
+}
+```
+
+---
+
+## Desenvolvimento
+
+### Scripts Disponíveis
+```bash
+npm run build       # Compila TypeScript (tsc)
+npm run dev         # Executa com ts-node (watch)
+npm run start       # Executa build compilado
+npm run test        # Executa todos os testes (Jest)
+npm run typecheck   # Verifica tipos (tsc --noEmit)
+```
+
+### Estrutura de Testes
+```
+tests/
+├── config.test.ts          # ConfigManager
+├── filesystem.test.ts      # FilesystemEngine
+├── process.test.ts         # ProcessTool
+├── npm.test.ts             # NpmTool
+├── git.test.ts             # GitTool
+├── workspace.test.ts       # WorkspaceManager
+├── router-v2.test.ts       # TaskRouter V0.3
+├── runtime.test.ts         # OfficeRuntime
+├── task-v2.test.ts         # Task types V0.3
+├── task.test.ts            # Task types V0.1/0.2
+├── version.test.ts         # Version info
+├── install.test.ts         # Installation flow
+├── usage.test.ts           # CLI usage
+└── integration.test.ts     # Fluxo E2E real
+```
+
+### Executar Testes
+```bash
+# Todos os testes (112 testes)
+npm test
+
+# Testes específicos
+npm test -- --testPathPattern=process
+npm test -- --testPathPattern=integration
+```
+
+---
+
+## Roadmap
+
+### V0.4 (Próximo)
+- [ ] **Task Scheduler**: Agendamento de tasks recorrentes/cron
+- [ ] **Webhook Server**: Receber eventos externos (GitHub, GitLab)
+- [ ] **Plugin System**: Carregamento dinâmico de ferramentas customizadas
+- [ ] **Remote Workspace**: SSH/WSL support para workspaces remotos
+
+### V1.0 (Estável)
+- [ ] API estável e documentada
+- [ ] Binários nativos (pkg/nexe)
+- [ ] Instaladores multiplataforma
+- [ ] Telemetria opcional
+
+---
+
+## Licença
+
+MIT License - veja [LICENSE](LICENSE) para detalhes.
+
+---
+
+## Contribuição
+
+1. Fork o repositório
+2. Crie branch: `git checkout -b feature/nova-funcionalidade`
+3. Commit: `git commit -m 'feat: adiciona nova funcionalidade'`
+4. Push: `git push origin feature/nova-funcionalidade`
+5. Abra Pull Request
+
+---
+
+**Desenvolvido com ❤️ para desenvolvedores que valorizam automação local-first segura.**
+
 Runtime local do ecossistema Umbrella. Nesta versão (V0.2) funciona **100% localmente e sem internet**.
 
 ## V0.2 — O que está implementado

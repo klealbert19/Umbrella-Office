@@ -27,6 +27,44 @@ export class FilesystemSecurity {
   }
 
   /**
+   * Retorna o workspace ativo.
+   */
+  getActiveWorkspace(): string | null {
+    return this.activeWorkspace;
+  }
+
+  /**
+   * Verifica se um caminho está dentro do workspace ativo.
+   */
+  isWithinWorkspace(targetPath: string): boolean {
+    if (!this.activeWorkspace) {
+      return true; // Sem workspace ativo, permite tudo
+    }
+    try {
+      const resolved = path.resolve(targetPath);
+      const normalized = path.normalize(resolved);
+
+      let realActive: string;
+      try {
+        realActive = fs.realpathSync(this.activeWorkspace);
+      } catch {
+        realActive = this.activeWorkspace;
+      }
+
+      let realTarget: string;
+      try {
+        realTarget = fs.realpathSync(normalized);
+      } catch {
+        realTarget = normalized;
+      }
+
+      return realTarget.startsWith(realActive + path.sep) || realTarget === realActive;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Normaliza um caminho e verifica se ele está dentro do workspace ativo.
    * Lança erro se o caminho tentar escapar.
    */

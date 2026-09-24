@@ -1,7 +1,7 @@
 {
   "name": "umbrella-office",
-  "version": "0.2.0",
-  "description": "Umbrella Office — runtime local do ecossistema Umbrella (V0.2)",
+  "version": "0.3.0",
+  "description": "Umbrella Office — runtime local do ecossistema Umbrella (V0.3)",
   "type": "commonjs",
   "main": "dist/main.js",
   "bin": {
