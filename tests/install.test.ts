@@ -33,9 +33,9 @@ describe('instalação: pré-requisitos', () => {
     expect(typeof pkg['version']).toBe('string');
   });
 
-  it('versão do pacote é 0.3.0', () => {
+  it('versão do pacote é 0.3.1', () => {
     const pkg = readJson(PKG_PATH);
-    expect(pkg['version']).toBe('0.3.0');
+    expect(pkg['version']).toBe('0.3.1');
   });
 
   it('engines exige node >= 18', () => {
@@ -54,7 +54,7 @@ describe('instalação: scripts e bin', () => {
 
   it('bin aponta para dist/main.js', () => {
     const pkg = readJson(PKG_PATH) as { bin?: Record<string, string> };
-    expect(pkg.bin?.['umbrella-office']).toBe('dist/main.js');
+    expect(pkg.bin?.['umbrella']).toBe('dist/main.js');
   });
 
   it('main aponta para dist/main.js', () => {

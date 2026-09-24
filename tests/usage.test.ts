@@ -192,7 +192,7 @@ describe('uso via CLI e2e: sessão real do usuário', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toMatch(/Umbrella Office/);
     expect(result.stdout).toMatch(/Runtime: ONLINE/);
-    expect(result.stdout).toMatch(/Version: 0\.3\.0/);
+    expect(result.stdout).toMatch(/Version: 0\.3\.1/);
     expect(result.stdout).toMatch(/v\d+\.\d+\.\d+/);
     expect(result.stdout).toMatch(/Goodbye/);
   }, 30000);
