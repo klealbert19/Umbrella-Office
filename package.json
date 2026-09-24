@@ -21,6 +21,7 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "allowScripts": ["umbrella-office"],
   "devDependencies": {
     "@types/jest": "^29.5.12",
     "@types/node": "^20.11.0",
