@@ -112,12 +112,12 @@ describe('instalação: configuração de build', () => {
     expect(fs.existsSync(path.join(ROOT, 'migrations'))).toBe(true);
   });
 
-  it('.gitignore ignora node_modules e dist', () => {
+  it('.gitignore ignora node_modules', () => {
     const gitignorePath = path.join(ROOT, '.gitignore');
     expect(fs.existsSync(gitignorePath)).toBe(true);
     const content = fs.readFileSync(gitignorePath, 'utf-8');
     expect(content).toMatch(/node_modules/);
-    expect(content).toMatch(/dist/);
+    // dist/ não é mais ignorado para permitir instalação via GitHub
   });
 });
 
