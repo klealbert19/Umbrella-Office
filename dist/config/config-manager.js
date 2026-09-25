@@ -128,16 +128,29 @@ class ConfigManager {
         }
         const raw = await this.readJson(this.configPath);
         // Aplica migrações se a configuração for de uma versão anterior.
-        if (!(0, config_schema_1.isConfigVersionSupported)(raw.configVersion)) {
+        let config;
+        const configVersion = raw.configVersion ?? '';
+        if (!(0, config_schema_1.isConfigVersionSupported)(configVersion)) {
             const migrated = await (0, migration_runner_1.runMigrations)(raw, this.logger);
-            await this.writeJson(this.configPath, migrated);
+            config = migrated;
             this.logger.info('Configuration migrated', {
-                from: raw.configVersion,
+                from: configVersion,
                 to: version_1.CONFIG_VERSION,
             });
-            return migrated;
         }
-        return raw;
+        else {
+            config = raw;
+        }
+        // Normaliza a configuração contra os defaults atuais para preencher campos ausentes
+        const normalized = (0, config_schema_1.normalizeConfig)(config);
+        // Se a normalização alterou a configuração, persistir a versão normalizada
+        if (JSON.stringify(normalized) !== JSON.stringify(config)) {
+            await this.writeJson(this.configPath, normalized);
+            this.logger.info('Configuration normalized and persisted', {
+                path: this.configPath,
+            });
+        }
+        return normalized;
     }
     async loadState() {
         if (!fs.existsSync(this.statePath)) {

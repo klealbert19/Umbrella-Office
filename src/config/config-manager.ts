@@ -13,6 +13,7 @@ import {
   UmbrellaConfig,
   createDefaultConfig,
   isConfigVersionSupported,
+  normalizeConfig,
 } from './config-schema';
 import { runMigrations } from '../migrations/migration-runner';
 import { Logger } from '../logging/logger';
@@ -120,20 +121,34 @@ export class ConfigManager {
       return fresh;
     }
 
-    const raw = await this.readJson<UmbrellaConfig>(this.configPath);
+    const raw = await this.readJson<Partial<UmbrellaConfig>>(this.configPath);
 
     // Aplica migrações se a configuração for de uma versão anterior.
-    if (!isConfigVersionSupported(raw.configVersion)) {
-      const migrated = await runMigrations(raw, this.logger);
-      await this.writeJson(this.configPath, migrated);
+    let config: UmbrellaConfig;
+    const configVersion = raw.configVersion ?? '';
+    if (!isConfigVersionSupported(configVersion)) {
+      const migrated = await runMigrations(raw as UmbrellaConfig, this.logger);
+      config = migrated;
       this.logger.info('Configuration migrated', {
-        from: raw.configVersion,
+        from: configVersion,
         to: CONFIG_VERSION,
       });
-      return migrated;
+    } else {
+      config = raw as UmbrellaConfig;
     }
 
-    return raw;
+    // Normaliza a configuração contra os defaults atuais para preencher campos ausentes
+    const normalized = normalizeConfig(config);
+
+    // Se a normalização alterou a configuração, persistir a versão normalizada
+    if (JSON.stringify(normalized) !== JSON.stringify(config)) {
+      await this.writeJson(this.configPath, normalized);
+      this.logger.info('Configuration normalized and persisted', {
+        path: this.configPath,
+      });
+    }
+
+    return normalized;
   }
 
   private async loadState(): Promise<AppState> {

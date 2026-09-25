@@ -12,6 +12,10 @@ import { TaskResult } from './result';
 import { ProcessTool } from '../tools/process/process-tool';
 import { NpmTool } from '../tools/npm/npm-tool';
 import { GitTool } from '../tools/git/git-tool';
+import { Scheduler } from '../scheduler/scheduler';
+import { WebhookServer } from '../webhook/webhook-server';
+import { PluginManager } from '../plugins/plugin-manager';
+import { RemoteWorkspaceManager } from '../remote/remote-manager';
 export type RuntimeState = 'STARTING' | 'ONLINE' | 'STOPPING' | 'STOPPED' | 'ERROR';
 export type RuntimeMode = 'LOCAL' | 'REMOTE';
 export declare class OfficeRuntime {
@@ -31,6 +35,10 @@ export declare class OfficeRuntime {
     private processTool;
     private npmTool;
     private gitTool;
+    private scheduler;
+    private webhookServer;
+    private pluginManager;
+    private remoteWorkspaceManager;
     getState(): RuntimeState;
     getMode(): RuntimeMode;
     getConfigManager(): ConfigManager;
@@ -42,6 +50,10 @@ export declare class OfficeRuntime {
     getProcessTool(): ProcessTool;
     getNpmTool(): NpmTool;
     getGitTool(): GitTool;
+    getScheduler(): Scheduler;
+    getWebhookServer(): WebhookServer;
+    getPluginManager(): PluginManager;
+    getRemoteWorkspaceManager(): RemoteWorkspaceManager;
     start(baseDir?: string): Promise<void>;
     stop(): Promise<void>;
     getBanner(): string;

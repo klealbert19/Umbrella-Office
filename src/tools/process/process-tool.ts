@@ -79,11 +79,13 @@ export class ProcessTool {
         if (child) {
           child.kill('SIGTERM');
           // Force kill after 5 seconds if still running
-          setTimeout(() => {
+          const forceKillTimeout = setTimeout(() => {
             if (child && !child.killed) {
               child.kill('SIGKILL');
             }
           }, 5000);
+          // Store force kill timeout to clear it on close
+          (child as any)._forceKillTimeout = forceKillTimeout;
         }
       }, timeout);
 
@@ -138,6 +140,11 @@ export class ProcessTool {
 
       child.on('close', (code: number | null) => {
         clearTimeout(timeoutId);
+        // Clear force kill timeout if it was set
+        const forceKillTimeout = (child as any)._forceKillTimeout;
+        if (forceKillTimeout) {
+          clearTimeout(forceKillTimeout);
+        }
         const exitCode = code ?? -1;
         const duration = Date.now() - startedAt;
 

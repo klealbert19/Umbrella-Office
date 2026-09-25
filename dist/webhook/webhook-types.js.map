@@ -1,0 +1,1 @@
+{"version":3,"file":"webhook-types.js","sourceRoot":"","sources":["../../src/webhook/webhook-types.ts"],"names":[],"mappings":";;AA6BA,gDAQC;AArCD;;GAEG;AACH,mCAAoC;AA0BpC,SAAgB,kBAAkB,CAAC,KAAa,EAAE,MAAc,EAAE,OAAgB;IAChF,OAAO;QACL,EAAE,EAAE,IAAA,mBAAU,GAAE;QAChB,KAAK;QACL,MAAM;QACN,SAAS,EAAE,IAAI,IAAI,EAAE,CAAC,WAAW,EAAE;QACnC,OAAO;KACR,CAAC;AACJ,CAAC"}

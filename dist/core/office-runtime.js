@@ -39,7 +39,7 @@ exports.OfficeRuntime = void 0;
  *
  * Responsável por iniciar/encerrar todos os componentes:
  * configuração, logger, permissões, executor local, roteador,
- * túnel e gerenciador de atualização.
+ * túnel, gerenciador de atualização, scheduler, webhook, plugins e remote workspace.
  */
 const os = __importStar(require("os"));
 const path = __importStar(require("path"));
@@ -60,6 +60,10 @@ const workspace_manager_1 = require("../workspace/workspace-manager");
 const process_tool_1 = require("../tools/process/process-tool");
 const npm_tool_1 = require("../tools/npm/npm-tool");
 const git_tool_1 = require("../tools/git/git-tool");
+const scheduler_1 = require("../scheduler/scheduler");
+const webhook_server_1 = require("../webhook/webhook-server");
+const plugin_manager_1 = require("../plugins/plugin-manager");
+const remote_manager_1 = require("../remote/remote-manager");
 class OfficeRuntime {
     state = 'STOPPED';
     mode = 'LOCAL';
@@ -77,6 +81,10 @@ class OfficeRuntime {
     processTool;
     npmTool;
     gitTool;
+    scheduler;
+    webhookServer;
+    pluginManager;
+    remoteWorkspaceManager;
     getState() {
         return this.state;
     }
@@ -110,6 +118,18 @@ class OfficeRuntime {
     getGitTool() {
         return this.gitTool;
     }
+    getScheduler() {
+        return this.scheduler;
+    }
+    getWebhookServer() {
+        return this.webhookServer;
+    }
+    getPluginManager() {
+        return this.pluginManager;
+    }
+    getRemoteWorkspaceManager() {
+        return this.remoteWorkspaceManager;
+    }
     async start(baseDir) {
         this.state = 'STARTING';
         // Logger temporário antes da configuração estar pronta.
@@ -129,10 +149,15 @@ class OfficeRuntime {
             this.filesystemEngine = new filesystem_engine_1.FilesystemEngine(this.logger, this.filesystemSecurity);
             this.projectScanner = new project_scanner_1.ProjectScanner(this.logger, this.filesystemEngine);
             this.workspaceManager = new workspace_manager_1.WorkspaceManager(this.logger, this.filesystemSecurity, this.projectScanner, this.configManager);
-            // Inicializa as novas ferramentas V0.3
+            // Inicializa as ferramentas V0.3
             this.processTool = new process_tool_1.ProcessTool(this.logger, this.filesystemSecurity);
             this.npmTool = new npm_tool_1.NpmTool(this.logger, this.filesystemSecurity, this.processTool);
             this.gitTool = new git_tool_1.GitTool(this.logger, this.filesystemSecurity, this.processTool);
+            // Inicializa os novos módulos V0.4 (com taskRouter placeholder, será atualizado depois)
+            this.scheduler = new scheduler_1.Scheduler(this.logger, undefined, baseDir);
+            this.webhookServer = new webhook_server_1.WebhookServer(this.logger, undefined, this.configManager.getConfig().webhook);
+            this.pluginManager = new plugin_manager_1.PluginManager(this.logger, undefined, this.permissionManager, this.configManager, baseDir);
+            this.remoteWorkspaceManager = new remote_manager_1.RemoteWorkspaceManager(this.logger);
             // Restaura workspace ativo do estado, se existir e for válido
             const savedWorkspace = this.configManager.getActiveWorkspace();
             if (savedWorkspace) {
@@ -152,7 +177,11 @@ class OfficeRuntime {
                     await this.configManager.setActiveWorkspace(null);
                 }
             }
-            this.taskRouter = new task_router_1.TaskRouter(this.localExecutor, this.permissionManager, this.logger, this.filesystemEngine, this.workspaceManager, this.processTool, this.npmTool, this.gitTool);
+            this.taskRouter = new task_router_1.TaskRouter(this.localExecutor, this.permissionManager, this.logger, this.filesystemEngine, this.workspaceManager, this.processTool, this.npmTool, this.gitTool, this.scheduler, this.webhookServer, this.pluginManager, this.remoteWorkspaceManager);
+            // Atualizar referências no scheduler, webhook server e plugin manager
+            this.scheduler.taskRouterRef = this.taskRouter;
+            this.webhookServer.taskRouterRef = this.taskRouter;
+            this.pluginManager.taskRouterRef = this.taskRouter;
             const orchConfig = this.configManager.getConfig().orchestrator;
             this.tunnelClient = new tunnel_client_1.TunnelClient(this.logger, {
                 enabled: orchConfig.enabled,
@@ -160,6 +189,13 @@ class OfficeRuntime {
             });
             await this.tunnelClient.start();
             this.updateManager = new update_manager_1.UpdateManager(this.logger);
+            // Inicializar módulos V0.4 (agora com taskRouter disponível)
+            await this.scheduler.start();
+            await this.pluginManager.initialize();
+            // Iniciar webhook server se habilitado
+            if (this.configManager.getConfig().webhook.enabled) {
+                await this.webhookServer.start();
+            }
             // Modo: LOCAL enquanto o orchestrator estiver desabilitado.
             this.mode = orchConfig.enabled && orchConfig.endpoint ? 'REMOTE' : 'LOCAL';
             this.state = 'ONLINE';
@@ -187,6 +223,19 @@ class OfficeRuntime {
         this.state = 'STOPPING';
         this.logger.info('Office stopping');
         try {
+            // Parar módulos V0.4
+            if (this.scheduler) {
+                await this.scheduler.stop();
+            }
+            if (this.webhookServer) {
+                await this.webhookServer.stop();
+            }
+            if (this.pluginManager) {
+                await this.pluginManager.shutdown();
+            }
+            if (this.remoteWorkspaceManager) {
+                await this.remoteWorkspaceManager.disconnect();
+            }
             if (this.tunnelClient) {
                 await this.tunnelClient.stop();
             }

@@ -2,7 +2,20 @@
 
 **Umbrella Office** é um runtime de automação de escritório local-first, seguro e extensível para desenvolvedores. Ele fornece uma interface de linha de comando (CLI) e API programática para executar tarefas de filesystem, processos, npm e git dentro de workspaces isolados e seguros.
 
-## Versão Atual: 0.3.2
+## Versão Atual: 0.4.0
+
+### Novidades na V0.4
+- **Task Scheduler**: Agendamento de tasks recorrentes (once, interval, cron) com persistência em `~/.umbrella/scheduler.json`
+- **Webhook Server**: Servidor HTTP local (porta 3456 padrão) para receber eventos externos (GitHub, GitLab, etc.) e transformá-los em Tasks, com autenticação Bearer token, validação de payload e allowlist de fontes/eventos
+- **Plugin System**: Carregamento dinâmico de plugins a partir de `~/.umbrella/plugins/{id}/manifest.json` com capabilities (tools, commands, event-handlers), lifecycle (initialize/shutdown) e contexto injetado (logger, taskRouter, permissionManager, configManager)
+- **Remote Workspace**: Suporte a workspaces remotos via 3 providers:
+  - **Local**: Workspace local (padrão, usa FilesystemSecurity existente)
+  - **SSH**: Conexão via SSH key/agent (sem senha), execução remota via SSH exec, operações de arquivo via SFTP
+  - **WSL**: Workspaces dentro do WSL no Windows (valida distribuição, executa via `wsl.exe bash -c`, arquivos via cat/tee/ls)
+- **Novos Comandos CLI**: `scheduler`, `webhook`, `plugin`, `remote` com subcomandos completos
+- **28 Novas Permissões**: `scheduler.*`, `webhook.*`, `plugin.*`, `remote.*` integradas ao PermissionManager
+- **Configuração Expandida**: Novas seções `scheduler`, `webhook`, `plugins`, `remote` em `config.json` com defaults sensíveis
+- **Normalização de Config**: Configurações antigas (V0.3) são automaticamente normalizadas ao carregar, preenchendo campos ausentes com defaults atuais
 
 ### Novidades na V0.3.2
 - **Distribuição Autocontida**: Eliminação do script `prepare` - artefatos de build (`dist/`) commitados no repositório
@@ -98,13 +111,17 @@ LocalExec  FS Engine  WorkspaceMgr  Scanner  ProcessTool
 | **OfficeRuntime** | Orquestrador principal, máquina de estados, ciclo de vida |
 | **TaskRouter** | Roteia tasks para executores apropriados |
 | **PermissionManager** | Boundaries de permissão por workspace |
-| **ConfigManager** | Persistência em `~/.umbrella/config.json` + `state.json` |
+| **ConfigManager** | Persistência em `~/.umbrella/config.json` + `state.json` + `scheduler.json` |
 | **FilesystemEngine** | Operações de arquivo seguras (read, write, edit, delete, list, mkdir) |
 | **WorkspaceManager** | Gerencia workspace ativo, abertura/fechamento, scan |
 | **ProjectScanner** | Detecta tipo de projeto, package manager, git |
 | **ProcessTool** | Execução de processos com timeout e validação |
 | **NpmTool** | Operações npm/yarn/pnpm via ProcessTool |
 | **GitTool** | Operações git via ProcessTool |
+| **Scheduler** | Agendamento de tasks (once, interval, cron) com persistência |
+| **WebhookServer** | Servidor HTTP para receber eventos externos |
+| **PluginManager** | Carregamento e lifecycle de plugins dinâmicos |
+| **RemoteWorkspaceManager** | Gerencia providers de workspace (local, SSH, WSL) |
 
 ---
 
@@ -136,7 +153,7 @@ function ensureWithinWorkspace(targetPath: string): string {
 - ✅ Validação de paths para operações git
 - ✅ Permissões granulares por tipo de operação
 
-### Modelo de Permissões (V0.3)
+### Modelo de Permissões (V0.4)
 
 | Permissão | Operações | Default |
 |-----------|-----------|---------|
@@ -151,6 +168,29 @@ function ensureWithinWorkspace(targetPath: string): string {
 | `npm.execute` | npm.install, run, test, build, exec | ✅ |
 | `git.read` | git.status, diff, log, branch, remote | ✅ |
 | `git.write` | git.add, commit, checkout | ✅ |
+| `scheduler.create` | scheduler.create | ✅ |
+| `scheduler.list` | scheduler.list | ✅ |
+| `scheduler.info` | scheduler.info | ✅ |
+| `scheduler.run` | scheduler.run | ✅ |
+| `scheduler.pause` | scheduler.pause | ✅ |
+| `scheduler.resume` | scheduler.resume | ✅ |
+| `scheduler.remove` | scheduler.remove | ✅ |
+| `webhook.status` | webhook.status | ✅ |
+| `webhook.start` | webhook.start | ✅ |
+| `webhook.stop` | webhook.stop | ✅ |
+| `webhook.list` | webhook.list | ✅ |
+| `webhook.register` | webhook.register | ✅ |
+| `webhook.unregister` | webhook.unregister | ✅ |
+| `plugin.list` | plugin.list | ✅ |
+| `plugin.info` | plugin.info | ✅ |
+| `plugin.enable` | plugin.enable | ✅ |
+| `plugin.disable` | plugin.disable | ✅ |
+| `plugin.load` | plugin.load | ✅ |
+| `plugin.unload` | plugin.unload | ✅ |
+| `remote.connect` | remote.connect | ✅ |
+| `remote.disconnect` | remote.disconnect | ✅ |
+| `remote.status` | remote.status | ✅ |
+| `remote.providers` | remote.providers | ✅ |
 
 ---
 
@@ -209,6 +249,52 @@ version                           # Mostra versão
 exit / quit                       # Sai do CLI
 ```
 
+### Scheduler (V0.4)
+```bash
+scheduler.create <name> <taskType> <taskPayload> <scheduleType> <scheduleValue>  # Cria task agendada
+# Ex: scheduler.create "daily-test" npm.test '{}' cron '0 2 * * *'
+# Ex: scheduler.create "hourly-build" npm.build '{}' interval 3600000
+# Ex: scheduler.create "once-deploy" process.exec '{"command":"deploy.sh"}' once '2024-12-31T23:59:00'
+scheduler.list                  # Lista todas as tasks agendadas
+scheduler.info <id>             # Mostra detalhes de uma task
+scheduler.run <id>              # Executa task imediatamente
+scheduler.pause <id>            # Pausa task agendada
+scheduler.resume <id>           # Retoma task pausada
+scheduler.remove <id>           # Remove task agendada
+```
+
+### Webhook (V0.4)
+```bash
+webhook.status                  # Status do servidor webhook
+webhook.start                   # Inicia servidor webhook
+webhook.stop                    # Para servidor webhook
+webhook.list                    # Lista endpoints registrados
+webhook.register <path> <eventType> [allowedSources...]  # Registra endpoint
+# Ex: webhook.register /github push github.com
+webhook.unregister <path>       # Remove endpoint
+```
+
+### Plugin (V0.4)
+```bash
+plugin.list                     # Lista plugins instalados
+plugin.info <id>                # Mostra detalhes do plugin
+plugin.enable <id>              # Habilita plugin
+plugin.disable <id>             # Desabilita plugin
+plugin.load <id>                # Carrega plugin (inicializa)
+plugin.unload <id>              # Descarrega plugin (shutdown)
+```
+
+### Remote Workspace (V0.4)
+```bash
+remote.connect <type> <config>  # Conecta a workspace remoto
+# Ex: remote.connect local '{"path":"/home/user/project"}'
+# Ex: remote.connect ssh '{"host":"server","user":"dev","keyPath":"~/.ssh/id_rsa","path":"/home/dev/project"}'
+# Ex: remote.connect wsl '{"distribution":"Ubuntu","path":"/home/user/project"}'
+remote.disconnect               # Desconecta workspace remoto
+remote.status                   # Status da conexão atual
+remote.providers                # Lista providers disponíveis
+```
+
 ---
 
 ## API Programática
@@ -253,16 +339,34 @@ Arquivos em `~/.umbrella/`:
 - `state.json` - Estado da sessão (workspace ativo, etc.)
 - `logs/office.log` - Logs estruturados JSON
 
-### Exemplo config.json
+### Exemplo config.json (V0.4)
 ```json
 {
-  "version": 1,
+  "configVersion": "1",
   "office": {
-    "defaultTimeout": 30000,
-    "maxLogSize": 10485760
+    "name": "Umbrella Office"
   },
   "orchestrator": {
-    "autoSaveInterval": 5000
+    "enabled": false,
+    "endpoint": null
+  },
+  "scheduler": {
+    "enabled": true
+  },
+  "webhook": {
+    "enabled": false,
+    "port": 3456,
+    "host": "127.0.0.1",
+    "authToken": null,
+    "allowedEvents": [],
+    "maxPayloadSize": 1048576
+  },
+  "plugins": {
+    "enabled": [],
+    "directory": "plugins"
+  },
+  "remote": {
+    "defaultProvider": "local"
   }
 }
 ```
@@ -283,7 +387,7 @@ npm run typecheck   # Verifica tipos (tsc --noEmit)
 ### Estrutura de Testes
 ```
 tests/
-├── config.test.ts          # ConfigManager
+├── config.test.ts          # ConfigManager (incl. normalização V0.4)
 ├── filesystem.test.ts      # FilesystemEngine
 ├── process.test.ts         # ProcessTool
 ├── npm.test.ts             # NpmTool
@@ -296,12 +400,16 @@ tests/
 ├── version.test.ts         # Version info
 ├── install.test.ts         # Installation flow
 ├── usage.test.ts           # CLI usage
-└── integration.test.ts     # Fluxo E2E real
+├── integration.test.ts     # Fluxo E2E real
+├── scheduler.test.ts       # Scheduler (V0.4)
+├── webhook.test.ts         # WebhookServer (V0.4)
+├── plugin.test.ts          # PluginManager (V0.4)
+└── remote.test.ts          # RemoteWorkspaceManager (V0.4)
 ```
 
 ### Executar Testes
 ```bash
-# Todos os testes (112 testes)
+# Todos os testes (117 testes)
 npm test
 
 # Testes específicos
@@ -313,11 +421,11 @@ npm test -- --testPathPattern=integration
 
 ## Roadmap
 
-### V0.4 (Próximo)
-- [ ] **Task Scheduler**: Agendamento de tasks recorrentes/cron
-- [ ] **Webhook Server**: Receber eventos externos (GitHub, GitLab)
-- [ ] **Plugin System**: Carregamento dinâmico de ferramentas customizadas
-- [ ] **Remote Workspace**: SSH/WSL support para workspaces remotos
+### V0.4 ✅ CONCLUÍDO
+- [x] **Task Scheduler**: Agendamento de tasks recorrentes/cron
+- [x] **Webhook Server**: Receber eventos externos (GitHub, GitLab)
+- [x] **Plugin System**: Carregamento dinâmico de ferramentas customizadas
+- [x] **Remote Workspace**: SSH/WSL support para workspaces remotos
 
 ### V1.0 (Estável)
 - [ ] API estável e documentada

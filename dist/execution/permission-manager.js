@@ -99,6 +99,52 @@ class PermissionManager {
                 return 'workspace.read';
             case 'workspace.scan':
                 return 'workspace.scan';
+            case 'scheduler.create':
+                return 'scheduler.create';
+            case 'scheduler.list':
+                return 'scheduler.list';
+            case 'scheduler.info':
+                return 'scheduler.info';
+            case 'scheduler.run':
+                return 'scheduler.run';
+            case 'scheduler.pause':
+                return 'scheduler.pause';
+            case 'scheduler.resume':
+                return 'scheduler.resume';
+            case 'scheduler.remove':
+                return 'scheduler.remove';
+            case 'webhook.status':
+                return 'webhook.status';
+            case 'webhook.start':
+                return 'webhook.start';
+            case 'webhook.stop':
+                return 'webhook.stop';
+            case 'webhook.list':
+                return 'webhook.list';
+            case 'webhook.register':
+                return 'webhook.register';
+            case 'webhook.unregister':
+                return 'webhook.unregister';
+            case 'plugin.list':
+                return 'plugin.list';
+            case 'plugin.info':
+                return 'plugin.info';
+            case 'plugin.enable':
+                return 'plugin.enable';
+            case 'plugin.disable':
+                return 'plugin.disable';
+            case 'plugin.load':
+                return 'plugin.load';
+            case 'plugin.unload':
+                return 'plugin.unload';
+            case 'remote.connect':
+                return 'remote.connect';
+            case 'remote.disconnect':
+                return 'remote.disconnect';
+            case 'remote.status':
+                return 'remote.status';
+            case 'remote.providers':
+                return 'remote.providers';
             default:
                 return null;
         }

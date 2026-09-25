@@ -6,7 +6,7 @@
  * permissões (filesystem.read, git.execute, etc.) sem reescrever o fluxo.
  */
 import { Logger } from '../logging/logger';
-export type PermissionName = 'process.execute' | 'process.spawn' | 'npm.execute' | 'npm.install' | 'npm.run' | 'npm.test' | 'npm.build' | 'npm.exec' | 'git.read' | 'git.write' | 'filesystem.read' | 'filesystem.write' | 'filesystem.edit' | 'filesystem.delete' | 'directory.list' | 'directory.create' | 'workspace.open' | 'workspace.close' | 'workspace.read' | 'workspace.scan';
+export type PermissionName = 'process.execute' | 'process.spawn' | 'npm.execute' | 'npm.install' | 'npm.run' | 'npm.test' | 'npm.build' | 'npm.exec' | 'git.read' | 'git.write' | 'filesystem.read' | 'filesystem.write' | 'filesystem.edit' | 'filesystem.delete' | 'directory.list' | 'directory.create' | 'workspace.open' | 'workspace.close' | 'workspace.read' | 'workspace.scan' | 'scheduler.create' | 'scheduler.list' | 'scheduler.info' | 'scheduler.run' | 'scheduler.pause' | 'scheduler.resume' | 'scheduler.remove' | 'webhook.status' | 'webhook.start' | 'webhook.stop' | 'webhook.list' | 'webhook.register' | 'webhook.unregister' | 'plugin.list' | 'plugin.info' | 'plugin.enable' | 'plugin.disable' | 'plugin.load' | 'plugin.unload' | 'remote.connect' | 'remote.disconnect' | 'remote.status' | 'remote.providers';
 export declare class PermissionManager {
     private readonly permissions;
     private readonly logger;

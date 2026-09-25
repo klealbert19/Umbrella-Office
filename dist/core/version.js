@@ -9,7 +9,7 @@ exports.getVersionInfo = getVersionInfo;
  * Consulte sempre este módulo.
  */
 exports.OFFICE_NAME = 'Umbrella Office';
-exports.VERSION = '0.3.2';
+exports.VERSION = '0.4.0';
 exports.PROTOCOL_VERSION = '1';
 exports.CONFIG_VERSION = '1';
 function getVersionInfo() {

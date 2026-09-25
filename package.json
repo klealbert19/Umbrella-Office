@@ -1,7 +1,7 @@
 {
   "name": "umbrella-office",
-  "version": "0.3.2",
-  "description": "Umbrella Office — runtime local do ecossistema Umbrella (V0.3)",
+  "version": "0.4.0",
+  "description": "Umbrella Office — runtime local do ecossistema Umbrella (V0.4)",
   "type": "commonjs",
   "main": "dist/main.js",
   "bin": {
@@ -19,13 +19,20 @@
     "test": "jest --runInBand",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["umbrella", "office", "runtime", "local"],
+  "keywords": [
+    "umbrella",
+    "office",
+    "runtime",
+    "local"
+  ],
   "author": "",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
   },
-  "allowScripts": ["umbrella-office"],
+  "allowScripts": [
+    "umbrella-office"
+  ],
   "devDependencies": {
     "@types/jest": "^29.5.12",
     "@types/node": "^20.11.0",
@@ -33,5 +40,9 @@
     "ts-jest": "^29.1.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@types/cron": "^2.0.1",
+    "cron": "^4.4.0"
   }
 }

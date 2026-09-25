@@ -27,6 +27,10 @@ export declare class CliInterface {
     private handleProcess;
     private handleNpm;
     private handleGit;
+    private handleScheduler;
+    private handleWebhook;
+    private handlePlugin;
+    private handleRemote;
     private shutdown;
 }
 //# sourceMappingURL=cli-interface.d.ts.map

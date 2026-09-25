@@ -1,20 +1,24 @@
 /**
  * Roteador de tarefas do Umbrella Office.
  *
- * Fluxo V0.3:
- *   CLI → Task → TaskRouter → PermissionManager → (LocalExecutor | FilesystemEngine | WorkspaceManager | ProcessTool | NpmTool | GitTool) → TaskResult
+ * Fluxo V0.4:
+ *   CLI → Task → TaskRouter → PermissionManager → (LocalExecutor | FilesystemEngine | WorkspaceManager | ProcessTool | NpmTool | GitTool | Scheduler | WebhookServer | PluginManager | RemoteWorkspaceManager) → TaskResult
  */
 import { Task } from './task';
 import { TaskResult, createFailureResult, createSuccessResult } from './result';
 import { LocalExecutor } from '../execution/local-executor';
 import { PermissionManager } from '../execution/permission-manager';
 import { Logger } from '../logging/logger';
-import { isFilesystemTask, isWorkspaceTask, isProcessTask, isNpmTask, isGitTask } from './task-v2';
+import { isFilesystemTask, isWorkspaceTask, isProcessTask, isNpmTask, isGitTask, isSchedulerTask, isWebhookTask, isPluginTask, isRemoteTask } from './task-v2';
 import { FilesystemEngine } from '../filesystem/filesystem-engine';
 import { WorkspaceManager } from '../workspace/workspace-manager';
 import { ProcessTool } from '../tools/process/process-tool';
 import { NpmTool } from '../tools/npm/npm-tool';
 import { GitTool } from '../tools/git/git-tool';
+import { Scheduler } from '../scheduler/scheduler';
+import { WebhookServer } from '../webhook/webhook-server';
+import { PluginManager } from '../plugins/plugin-manager';
+import { RemoteWorkspaceManager } from '../remote/remote-manager';
 
 export class TaskRouter {
   private readonly localExecutor: LocalExecutor;
@@ -25,6 +29,10 @@ export class TaskRouter {
   private readonly processTool?: ProcessTool;
   private readonly npmTool?: NpmTool;
   private readonly gitTool?: GitTool;
+  private readonly scheduler?: Scheduler;
+  private readonly webhookServer?: WebhookServer;
+  private readonly pluginManager?: PluginManager;
+  private readonly remoteWorkspaceManager?: RemoteWorkspaceManager;
 
   constructor(
     localExecutor: LocalExecutor,
@@ -34,7 +42,11 @@ export class TaskRouter {
     workspaceManager?: WorkspaceManager,
     processTool?: ProcessTool,
     npmTool?: NpmTool,
-    gitTool?: GitTool
+    gitTool?: GitTool,
+    scheduler?: Scheduler,
+    webhookServer?: WebhookServer,
+    pluginManager?: PluginManager,
+    remoteWorkspaceManager?: RemoteWorkspaceManager
   ) {
     this.localExecutor = localExecutor;
     this.permissionManager = permissionManager;
@@ -44,6 +56,10 @@ export class TaskRouter {
     this.processTool = processTool;
     this.npmTool = npmTool;
     this.gitTool = gitTool;
+    this.scheduler = scheduler;
+    this.webhookServer = webhookServer;
+    this.pluginManager = pluginManager;
+    this.remoteWorkspaceManager = remoteWorkspaceManager;
   }
 
   getWorkspaceManager(): WorkspaceManager | undefined {
@@ -64,6 +80,22 @@ export class TaskRouter {
 
   getGitTool(): GitTool | undefined {
     return this.gitTool;
+  }
+
+  getScheduler(): Scheduler | undefined {
+    return this.scheduler;
+  }
+
+  getWebhookServer(): WebhookServer | undefined {
+    return this.webhookServer;
+  }
+
+  getPluginManager(): PluginManager | undefined {
+    return this.pluginManager;
+  }
+
+  getRemoteWorkspaceManager(): RemoteWorkspaceManager | undefined {
+    return this.remoteWorkspaceManager;
   }
 
   async route(task: Task): Promise<TaskResult> {
@@ -100,6 +132,22 @@ export class TaskRouter {
 
     if (isGitTask(task)) {
       return this.routeGitTask(task);
+    }
+
+    if (isSchedulerTask(task)) {
+      return this.routeSchedulerTask(task);
+    }
+
+    if (isWebhookTask(task)) {
+      return this.routeWebhookTask(task);
+    }
+
+    if (isPluginTask(task)) {
+      return this.routePluginTask(task);
+    }
+
+    if (isRemoteTask(task)) {
+      return this.routeRemoteTask(task);
     }
 
     // Tipos futuros (ex.: remote.*) serão roteados para o TunnelExecutor.
@@ -435,6 +483,269 @@ export class TaskRouter {
         default: {
           const finishedAt = new Date().toISOString();
           return createFailureResult(task.id, startedAt, finishedAt, `Unknown workspace task: ${task.type}`);
+        }
+      }
+    } catch (err) {
+      const finishedAt = new Date().toISOString();
+      const message = err instanceof Error ? err.message : String(err);
+      return createFailureResult(task.id, startedAt, finishedAt, message);
+    }
+  }
+
+  private async routeSchedulerTask(task: Task): Promise<TaskResult> {
+    const startedAt = new Date().toISOString();
+    if (!this.scheduler) {
+      const finishedAt = new Date().toISOString();
+      return createFailureResult(task.id, startedAt, finishedAt, 'Scheduler not initialized');
+    }
+    const payload = task.payload as Record<string, unknown>;
+    try {
+      let result;
+      switch (task.type) {
+        case 'scheduler.create': {
+          const scheduledTask = this.scheduler.createTask(
+            String(payload['name'] ?? ''),
+            payload['task'] as { type: string; payload: unknown },
+            payload['schedule'] as { type: 'once' | 'interval' | 'cron'; value: string | number }
+          );
+          const finishedAt = new Date().toISOString();
+          return createSuccessResult(task.id, startedAt, finishedAt, JSON.stringify(scheduledTask, null, 2), 0);
+        }
+        case 'scheduler.list': {
+          const tasks = this.scheduler.listTasks();
+          const finishedAt = new Date().toISOString();
+          return createSuccessResult(task.id, startedAt, finishedAt, JSON.stringify(tasks, null, 2), 0);
+        }
+        case 'scheduler.info': {
+          const taskId = String(payload['id'] ?? '');
+          const scheduledTask = this.scheduler.getTask(taskId);
+          const finishedAt = new Date().toISOString();
+          if (scheduledTask) {
+            return createSuccessResult(task.id, startedAt, finishedAt, JSON.stringify(scheduledTask, null, 2), 0);
+          }
+          return createFailureResult(task.id, startedAt, finishedAt, 'Task not found');
+        }
+        case 'scheduler.run': {
+          const taskId = String(payload['id'] ?? '');
+          result = await this.scheduler.runTaskNow(taskId);
+          return result;
+        }
+        case 'scheduler.pause': {
+          const taskId = String(payload['id'] ?? '');
+          const success = await this.scheduler.pauseTask(taskId);
+          const finishedAt = new Date().toISOString();
+          if (success) {
+            return createSuccessResult(task.id, startedAt, finishedAt, 'Task paused', 0);
+          }
+          return createFailureResult(task.id, startedAt, finishedAt, 'Task not found');
+        }
+        case 'scheduler.resume': {
+          const taskId = String(payload['id'] ?? '');
+          const success = await this.scheduler.resumeTask(taskId);
+          const finishedAt = new Date().toISOString();
+          if (success) {
+            return createSuccessResult(task.id, startedAt, finishedAt, 'Task resumed', 0);
+          }
+          return createFailureResult(task.id, startedAt, finishedAt, 'Task not found');
+        }
+        case 'scheduler.remove': {
+          const taskId = String(payload['id'] ?? '');
+          const success = await this.scheduler.removeTask(taskId);
+          const finishedAt = new Date().toISOString();
+          if (success) {
+            return createSuccessResult(task.id, startedAt, finishedAt, 'Task removed', 0);
+          }
+          return createFailureResult(task.id, startedAt, finishedAt, 'Task not found');
+        }
+        default: {
+          const finishedAt = new Date().toISOString();
+          return createFailureResult(task.id, startedAt, finishedAt, `Unknown scheduler task: ${task.type}`);
+        }
+      }
+    } catch (err) {
+      const finishedAt = new Date().toISOString();
+      const message = err instanceof Error ? err.message : String(err);
+      return createFailureResult(task.id, startedAt, finishedAt, message);
+    }
+  }
+
+  private async routeWebhookTask(task: Task): Promise<TaskResult> {
+    const startedAt = new Date().toISOString();
+    if (!this.webhookServer) {
+      const finishedAt = new Date().toISOString();
+      return createFailureResult(task.id, startedAt, finishedAt, 'WebhookServer not initialized');
+    }
+    const payload = task.payload as Record<string, unknown>;
+    try {
+      switch (task.type) {
+        case 'webhook.status': {
+          const status = this.webhookServer.getStatus();
+          const finishedAt = new Date().toISOString();
+          return createSuccessResult(task.id, startedAt, finishedAt, JSON.stringify(status, null, 2), 0);
+        }
+        case 'webhook.start': {
+          await this.webhookServer.start();
+          const finishedAt = new Date().toISOString();
+          return createSuccessResult(task.id, startedAt, finishedAt, 'Webhook server started', 0);
+        }
+        case 'webhook.stop': {
+          await this.webhookServer.stop();
+          const finishedAt = new Date().toISOString();
+          return createSuccessResult(task.id, startedAt, finishedAt, 'Webhook server stopped', 0);
+        }
+        case 'webhook.list': {
+          const endpoints = this.webhookServer.listEndpoints();
+          const finishedAt = new Date().toISOString();
+          return createSuccessResult(task.id, startedAt, finishedAt, JSON.stringify(endpoints, null, 2), 0);
+        }
+        case 'webhook.register': {
+          const path = String(payload['path'] ?? '');
+          const eventType = String(payload['eventType'] ?? '');
+          const allowedSources = (payload['allowedSources'] as string[]) ?? [];
+          const requiredAuth = Boolean(payload['requiredAuth']);
+          this.webhookServer.registerEndpoint({ path, eventType, allowedSources, requiredAuth });
+          const finishedAt = new Date().toISOString();
+          return createSuccessResult(task.id, startedAt, finishedAt, 'Endpoint registered', 0);
+        }
+        case 'webhook.unregister': {
+          const path = String(payload['path'] ?? '');
+          const success = this.webhookServer.unregisterEndpoint(path);
+          const finishedAt = new Date().toISOString();
+          if (success) {
+            return createSuccessResult(task.id, startedAt, finishedAt, 'Endpoint unregistered', 0);
+          }
+          return createFailureResult(task.id, startedAt, finishedAt, 'Endpoint not found');
+        }
+        default: {
+          const finishedAt = new Date().toISOString();
+          return createFailureResult(task.id, startedAt, finishedAt, `Unknown webhook task: ${task.type}`);
+        }
+      }
+    } catch (err) {
+      const finishedAt = new Date().toISOString();
+      const message = err instanceof Error ? err.message : String(err);
+      return createFailureResult(task.id, startedAt, finishedAt, message);
+    }
+  }
+
+  private async routePluginTask(task: Task): Promise<TaskResult> {
+    const startedAt = new Date().toISOString();
+    if (!this.pluginManager) {
+      const finishedAt = new Date().toISOString();
+      return createFailureResult(task.id, startedAt, finishedAt, 'PluginManager not initialized');
+    }
+    const payload = task.payload as Record<string, unknown>;
+    try {
+      switch (task.type) {
+        case 'plugin.list': {
+          const plugins = this.pluginManager.listPlugins();
+          const finishedAt = new Date().toISOString();
+          return createSuccessResult(task.id, startedAt, finishedAt, JSON.stringify(plugins, null, 2), 0);
+        }
+        case 'plugin.info': {
+          const pluginId = String(payload['id'] ?? '');
+          const plugin = this.pluginManager.getPlugin(pluginId);
+          const finishedAt = new Date().toISOString();
+          if (plugin) {
+            return createSuccessResult(task.id, startedAt, finishedAt, JSON.stringify(plugin, null, 2), 0);
+          }
+          return createFailureResult(task.id, startedAt, finishedAt, 'Plugin not found');
+        }
+        case 'plugin.enable': {
+          const pluginId = String(payload['id'] ?? '');
+          const success = await this.pluginManager.enablePlugin(pluginId);
+          const finishedAt = new Date().toISOString();
+          if (success) {
+            return createSuccessResult(task.id, startedAt, finishedAt, 'Plugin enabled', 0);
+          }
+          return createFailureResult(task.id, startedAt, finishedAt, 'Failed to enable plugin');
+        }
+        case 'plugin.disable': {
+          const pluginId = String(payload['id'] ?? '');
+          const success = await this.pluginManager.disablePlugin(pluginId);
+          const finishedAt = new Date().toISOString();
+          if (success) {
+            return createSuccessResult(task.id, startedAt, finishedAt, 'Plugin disabled', 0);
+          }
+          return createFailureResult(task.id, startedAt, finishedAt, 'Failed to disable plugin');
+        }
+        case 'plugin.load': {
+          const pluginPath = String(payload['path'] ?? '');
+          const plugin = await this.pluginManager.loadPlugin(pluginPath);
+          const finishedAt = new Date().toISOString();
+          if (plugin) {
+            return createSuccessResult(task.id, startedAt, finishedAt, JSON.stringify(plugin, null, 2), 0);
+          }
+          return createFailureResult(task.id, startedAt, finishedAt, 'Failed to load plugin');
+        }
+        case 'plugin.unload': {
+          const pluginId = String(payload['id'] ?? '');
+          const success = await this.pluginManager.removePlugin(pluginId);
+          const finishedAt = new Date().toISOString();
+          if (success) {
+            return createSuccessResult(task.id, startedAt, finishedAt, 'Plugin removed', 0);
+          }
+          return createFailureResult(task.id, startedAt, finishedAt, 'Failed to remove plugin');
+        }
+        default: {
+          const finishedAt = new Date().toISOString();
+          return createFailureResult(task.id, startedAt, finishedAt, `Unknown plugin task: ${task.type}`);
+        }
+      }
+    } catch (err) {
+      const finishedAt = new Date().toISOString();
+      const message = err instanceof Error ? err.message : String(err);
+      return createFailureResult(task.id, startedAt, finishedAt, message);
+    }
+  }
+
+  private async routeRemoteTask(task: Task): Promise<TaskResult> {
+    const startedAt = new Date().toISOString();
+    if (!this.remoteWorkspaceManager) {
+      const finishedAt = new Date().toISOString();
+      return createFailureResult(task.id, startedAt, finishedAt, 'RemoteWorkspaceManager not initialized');
+    }
+    const payload = task.payload as Record<string, unknown>;
+    try {
+      switch (task.type) {
+        case 'remote.connect': {
+          const config = {
+            type: String(payload['type'] ?? 'local') as 'local' | 'ssh' | 'wsl',
+            name: String(payload['name'] ?? ''),
+            host: payload['host'] as string | undefined,
+            port: payload['port'] as number | undefined,
+            user: payload['user'] as string | undefined,
+            keyPath: payload['keyPath'] as string | undefined,
+            distribution: payload['distribution'] as string | undefined,
+            path: String(payload['path'] ?? ''),
+          };
+          await this.remoteWorkspaceManager.connect(config);
+          const finishedAt = new Date().toISOString();
+          return createSuccessResult(task.id, startedAt, finishedAt, 'Workspace connected', 0);
+        }
+        case 'remote.disconnect': {
+          await this.remoteWorkspaceManager.disconnect();
+          const finishedAt = new Date().toISOString();
+          return createSuccessResult(task.id, startedAt, finishedAt, 'Workspace disconnected', 0);
+        }
+        case 'remote.status': {
+          const provider = this.remoteWorkspaceManager.getActiveProvider();
+          const config = this.remoteWorkspaceManager.getActiveConfig();
+          const finishedAt = new Date().toISOString();
+          return createSuccessResult(task.id, startedAt, finishedAt, JSON.stringify({
+            connected: this.remoteWorkspaceManager.isConnected(),
+            provider: provider ? { type: provider.type, name: provider.name } : null,
+            config: config ? { type: config.type, name: config.name, path: config.path } : null,
+          }, null, 2), 0);
+        }
+        case 'remote.providers': {
+          const providers = this.remoteWorkspaceManager.listProviders();
+          const finishedAt = new Date().toISOString();
+          return createSuccessResult(task.id, startedAt, finishedAt, JSON.stringify(providers.map(p => ({ type: p.type, name: p.name })), null, 2), 0);
+        }
+        default: {
+          const finishedAt = new Date().toISOString();
+          return createFailureResult(task.id, startedAt, finishedAt, `Unknown remote task: ${task.type}`);
         }
       }
     } catch (err) {

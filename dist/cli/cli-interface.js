@@ -187,6 +187,18 @@ class CliInterface {
                 case 'file':
                     await this.handleFile(rest);
                     break;
+                case 'scheduler':
+                    await this.handleScheduler(rest);
+                    break;
+                case 'webhook':
+                    await this.handleWebhook(rest);
+                    break;
+                case 'plugin':
+                    await this.handlePlugin(rest);
+                    break;
+                case 'remote':
+                    await this.handleRemote(rest);
+                    break;
                 case 'exit':
                 case 'quit':
                     this.exitRequested?.();
@@ -245,6 +257,33 @@ class CliInterface {
         console.log('    delete <path>     Delete file');
         console.log('    list <path>       List directory');
         console.log('    mkdir <path>      Create directory');
+        console.log('  scheduler <cmd>    Task Scheduler:');
+        console.log('    create <name> <taskType> <scheduleType> <value>  Create scheduled task');
+        console.log('    list              List all scheduled tasks');
+        console.log('    info <id>         Show task details');
+        console.log('    run <id>          Execute task immediately');
+        console.log('    pause <id>        Pause a task');
+        console.log('    resume <id>       Resume a paused task');
+        console.log('    remove <id>       Remove a task');
+        console.log('  webhook <cmd>      Webhook Server:');
+        console.log('    status            Show webhook server status');
+        console.log('    start             Start webhook server');
+        console.log('    stop              Stop webhook server');
+        console.log('    list              List registered endpoints');
+        console.log('    register <path> <eventType>  Register endpoint');
+        console.log('    unregister <path> Unregister endpoint');
+        console.log('  plugin <cmd>       Plugin System:');
+        console.log('    list              List loaded plugins');
+        console.log('    info <id>         Show plugin details');
+        console.log('    enable <id>       Enable a plugin');
+        console.log('    disable <id>      Disable a plugin');
+        console.log('    load <path>       Load plugin from path');
+        console.log('    unload <id>       Unload and remove plugin');
+        console.log('  remote <cmd>       Remote Workspace:');
+        console.log('    connect <type> <name> <path> [options]  Connect to remote workspace');
+        console.log('    disconnect        Disconnect from remote workspace');
+        console.log('    status            Show current connection status');
+        console.log('    providers         List available providers');
         console.log('  exit              Shutdown the runtime');
     }
     printStatus() {
@@ -834,6 +873,451 @@ class CliInterface {
                 }
                 default:
                     console.log(`Unknown git command: ${sub}`);
+                    console.log('Type "help" for available commands.');
+            }
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.log(`Error: ${message}`);
+        }
+    }
+    async handleScheduler(args) {
+        if (args.length === 0) {
+            console.log('Usage: scheduler <command> [args...]');
+            console.log('Commands:');
+            console.log('  create <name> <taskType> <scheduleType> <value>  Create scheduled task');
+            console.log('  list              List all scheduled tasks');
+            console.log('  info <id>         Show task details');
+            console.log('  run <id>          Execute task immediately');
+            console.log('  pause <id>        Pause a task');
+            console.log('  resume <id>       Resume a paused task');
+            console.log('  remove <id>       Remove a task');
+            return;
+        }
+        const [sub, ...rest] = args;
+        const cmd = sub.toLowerCase();
+        try {
+            switch (cmd) {
+                case 'create': {
+                    if (rest.length < 4) {
+                        console.log('Usage: scheduler create <name> <taskType> <scheduleType> <value>');
+                        console.log('Example: scheduler create "daily-backup" "process.execute" "cron" "0 2 * * *"');
+                        return;
+                    }
+                    const [name, taskType, scheduleType, ...valueParts] = rest;
+                    const value = valueParts.join(' ');
+                    const task = (0, task_v2_1.createSchedulerTask)('scheduler.create', {
+                        name,
+                        task: { type: taskType, payload: {} },
+                        schedule: { type: scheduleType, value },
+                    });
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Scheduled task created:');
+                        console.log(result.output);
+                    }
+                    else {
+                        console.log(`Failed to create task: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'list': {
+                    const task = (0, task_v2_1.createSchedulerTask)('scheduler.list', {});
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log(result.output);
+                    }
+                    else {
+                        console.log(`Failed to list tasks: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'info': {
+                    if (rest.length === 0) {
+                        console.log('Usage: scheduler info <id>');
+                        return;
+                    }
+                    const task = (0, task_v2_1.createSchedulerTask)('scheduler.info', { id: rest[0] });
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log(result.output);
+                    }
+                    else {
+                        console.log(`Failed to get task info: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'run': {
+                    if (rest.length === 0) {
+                        console.log('Usage: scheduler run <id>');
+                        return;
+                    }
+                    const task = (0, task_v2_1.createSchedulerTask)('scheduler.run', { id: rest[0] });
+                    console.log('Running task...');
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        if (result.output)
+                            console.log(result.output);
+                        console.log('Task executed successfully.');
+                    }
+                    else {
+                        console.log(`Task failed: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'pause': {
+                    if (rest.length === 0) {
+                        console.log('Usage: scheduler pause <id>');
+                        return;
+                    }
+                    const task = (0, task_v2_1.createSchedulerTask)('scheduler.pause', { id: rest[0] });
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Task paused.');
+                    }
+                    else {
+                        console.log(`Failed to pause task: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'resume': {
+                    if (rest.length === 0) {
+                        console.log('Usage: scheduler resume <id>');
+                        return;
+                    }
+                    const task = (0, task_v2_1.createSchedulerTask)('scheduler.resume', { id: rest[0] });
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Task resumed.');
+                    }
+                    else {
+                        console.log(`Failed to resume task: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'remove': {
+                    if (rest.length === 0) {
+                        console.log('Usage: scheduler remove <id>');
+                        return;
+                    }
+                    const task = (0, task_v2_1.createSchedulerTask)('scheduler.remove', { id: rest[0] });
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Task removed.');
+                    }
+                    else {
+                        console.log(`Failed to remove task: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                default:
+                    console.log(`Unknown scheduler command: ${sub}`);
+                    console.log('Type "help" for available commands.');
+            }
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.log(`Error: ${message}`);
+        }
+    }
+    async handleWebhook(args) {
+        if (args.length === 0) {
+            console.log('Usage: webhook <command> [args...]');
+            console.log('Commands:');
+            console.log('  status            Show webhook server status');
+            console.log('  start             Start webhook server');
+            console.log('  stop              Stop webhook server');
+            console.log('  list              List registered endpoints');
+            console.log('  register <path> <eventType>  Register endpoint');
+            console.log('  unregister <path> Unregister endpoint');
+            return;
+        }
+        const [sub, ...rest] = args;
+        const cmd = sub.toLowerCase();
+        try {
+            switch (cmd) {
+                case 'status': {
+                    const task = (0, task_v2_1.createWebhookTask)('webhook.status', {});
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log(result.output);
+                    }
+                    else {
+                        console.log(`Failed to get status: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'start': {
+                    const task = (0, task_v2_1.createWebhookTask)('webhook.start', {});
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Webhook server started.');
+                    }
+                    else {
+                        console.log(`Failed to start: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'stop': {
+                    const task = (0, task_v2_1.createWebhookTask)('webhook.stop', {});
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Webhook server stopped.');
+                    }
+                    else {
+                        console.log(`Failed to stop: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'list': {
+                    const task = (0, task_v2_1.createWebhookTask)('webhook.list', {});
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log(result.output);
+                    }
+                    else {
+                        console.log(`Failed to list endpoints: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'register': {
+                    if (rest.length < 2) {
+                        console.log('Usage: webhook register <path> <eventType>');
+                        return;
+                    }
+                    const [path, eventType] = rest;
+                    const task = (0, task_v2_1.createWebhookTask)('webhook.register', { path, eventType });
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Endpoint registered.');
+                    }
+                    else {
+                        console.log(`Failed to register: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'unregister': {
+                    if (rest.length === 0) {
+                        console.log('Usage: webhook unregister <path>');
+                        return;
+                    }
+                    const task = (0, task_v2_1.createWebhookTask)('webhook.unregister', { path: rest[0] });
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Endpoint unregistered.');
+                    }
+                    else {
+                        console.log(`Failed to unregister: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                default:
+                    console.log(`Unknown webhook command: ${sub}`);
+                    console.log('Type "help" for available commands.');
+            }
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.log(`Error: ${message}`);
+        }
+    }
+    async handlePlugin(args) {
+        if (args.length === 0) {
+            console.log('Usage: plugin <command> [args...]');
+            console.log('Commands:');
+            console.log('  list              List loaded plugins');
+            console.log('  info <id>         Show plugin details');
+            console.log('  enable <id>       Enable a plugin');
+            console.log('  disable <id>      Disable a plugin');
+            console.log('  load <path>       Load plugin from path');
+            console.log('  unload <id>       Unload and remove plugin');
+            return;
+        }
+        const [sub, ...rest] = args;
+        const cmd = sub.toLowerCase();
+        try {
+            switch (cmd) {
+                case 'list': {
+                    const task = (0, task_v2_1.createPluginTask)('plugin.list', {});
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log(result.output);
+                    }
+                    else {
+                        console.log(`Failed to list plugins: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'info': {
+                    if (rest.length === 0) {
+                        console.log('Usage: plugin info <id>');
+                        return;
+                    }
+                    const task = (0, task_v2_1.createPluginTask)('plugin.info', { id: rest[0] });
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log(result.output);
+                    }
+                    else {
+                        console.log(`Failed to get plugin info: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'enable': {
+                    if (rest.length === 0) {
+                        console.log('Usage: plugin enable <id>');
+                        return;
+                    }
+                    const task = (0, task_v2_1.createPluginTask)('plugin.enable', { id: rest[0] });
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Plugin enabled.');
+                    }
+                    else {
+                        console.log(`Failed to enable plugin: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'disable': {
+                    if (rest.length === 0) {
+                        console.log('Usage: plugin disable <id>');
+                        return;
+                    }
+                    const task = (0, task_v2_1.createPluginTask)('plugin.disable', { id: rest[0] });
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Plugin disabled.');
+                    }
+                    else {
+                        console.log(`Failed to disable plugin: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'load': {
+                    if (rest.length === 0) {
+                        console.log('Usage: plugin load <path>');
+                        return;
+                    }
+                    const task = (0, task_v2_1.createPluginTask)('plugin.load', { path: rest[0] });
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Plugin loaded.');
+                        console.log(result.output);
+                    }
+                    else {
+                        console.log(`Failed to load plugin: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'unload': {
+                    if (rest.length === 0) {
+                        console.log('Usage: plugin unload <id>');
+                        return;
+                    }
+                    const task = (0, task_v2_1.createPluginTask)('plugin.unload', { id: rest[0] });
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Plugin removed.');
+                    }
+                    else {
+                        console.log(`Failed to remove plugin: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                default:
+                    console.log(`Unknown plugin command: ${sub}`);
+                    console.log('Type "help" for available commands.');
+            }
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.log(`Error: ${message}`);
+        }
+    }
+    async handleRemote(args) {
+        if (args.length === 0) {
+            console.log('Usage: remote <command> [args...]');
+            console.log('Commands:');
+            console.log('  connect <type> <name> <path> [options]  Connect to remote workspace');
+            console.log('  disconnect        Disconnect from remote workspace');
+            console.log('  status            Show current connection status');
+            console.log('  providers         List available providers');
+            return;
+        }
+        const [sub, ...rest] = args;
+        const cmd = sub.toLowerCase();
+        try {
+            switch (cmd) {
+                case 'connect': {
+                    if (rest.length < 3) {
+                        console.log('Usage: remote connect <type> <name> <path> [options]');
+                        console.log('Types: local, ssh, wsl');
+                        console.log('SSH options: --host <host> --port <port> --user <user> --key <keyPath>');
+                        console.log('WSL options: --distro <distribution>');
+                        return;
+                    }
+                    const [type, name, path] = rest;
+                    const options = {};
+                    for (let i = 3; i < rest.length; i += 2) {
+                        if (rest[i].startsWith('--')) {
+                            options[rest[i].slice(2)] = rest[i + 1] ?? '';
+                        }
+                    }
+                    const payload = { type, name, path };
+                    if (type === 'ssh') {
+                        payload.host = options.host;
+                        payload.port = options.port ? parseInt(options.port, 10) : 22;
+                        payload.user = options.user;
+                        payload.keyPath = options.key;
+                    }
+                    else if (type === 'wsl') {
+                        payload.distribution = options.distro;
+                    }
+                    const task = (0, task_v2_1.createRemoteTask)('remote.connect', payload);
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Workspace connected.');
+                    }
+                    else {
+                        console.log(`Failed to connect: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'disconnect': {
+                    const task = (0, task_v2_1.createRemoteTask)('remote.disconnect', {});
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log('Workspace disconnected.');
+                    }
+                    else {
+                        console.log(`Failed to disconnect: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'status': {
+                    const task = (0, task_v2_1.createRemoteTask)('remote.status', {});
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log(result.output);
+                    }
+                    else {
+                        console.log(`Failed to get status: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                case 'providers': {
+                    const task = (0, task_v2_1.createRemoteTask)('remote.providers', {});
+                    const result = await this.runtime.getTaskRouter().route(task);
+                    if (result.success) {
+                        console.log(result.output);
+                    }
+                    else {
+                        console.log(`Failed to list providers: ${result.error ?? 'unknown error'}`);
+                    }
+                    break;
+                }
+                default:
+                    console.log(`Unknown remote command: ${sub}`);
                     console.log('Type "help" for available commands.');
             }
         }

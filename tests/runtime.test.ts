@@ -96,7 +96,7 @@ describe('tunnel', () => {
 describe('update', () => {
   it('should report current version and NOT_CONFIGURED', async () => {
     const updater = new UpdateManager(makeLogger());
-    expect(updater.getCurrentVersion()).toBe('0.3.2');
+    expect(updater.getCurrentVersion()).toBe('0.4.0');
     const info = await updater.checkForUpdates();
     expect(info.status).toBe('NOT_CONFIGURED');
     expect(info.message).toBe('Update system: NOT CONFIGURED');

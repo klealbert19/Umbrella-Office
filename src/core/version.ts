@@ -6,7 +6,7 @@
  */
 export const OFFICE_NAME = 'Umbrella Office';
 
-export const VERSION = '0.3.2';
+export const VERSION = '0.4.0';
 export const PROTOCOL_VERSION = '1';
 export const CONFIG_VERSION = '1';
 

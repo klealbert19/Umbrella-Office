@@ -5,7 +5,7 @@
  * Consulte sempre este módulo.
  */
 export declare const OFFICE_NAME = "Umbrella Office";
-export declare const VERSION = "0.3.2";
+export declare const VERSION = "0.4.0";
 export declare const PROTOCOL_VERSION = "1";
 export declare const CONFIG_VERSION = "1";
 export interface VersionInfo {
